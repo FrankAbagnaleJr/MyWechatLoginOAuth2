@@ -1,4 +1,5 @@
-微信OAuth2.0认证，
+微信OAuth2.0认证。用户扫码确认后微信会回调controller下面的接口。
+---
 
 认证模式采用策略模式，都实现AuthService接口，重写execute方法
 
@@ -7,14 +8,17 @@
     3. 如果是短信登录，实现接口@Service("sms_authservice")
     4. 如果是QQ登录，实现接口@Service("qq_authservice")
 
-在UserDetails的校验方法loadUserByUsername中，前端传入的是表单json字符串
+在UserDetails的校验方法loadUserByUsername中，前端传入的username是表单json字符串
 
     1.从json字符串中获取认证类型
     2.从SpringApplication中获取AuthService的实现类，根据名字拿
     3.然后执行实现类中的execute方法校验，返回UserDetails对象
 
+--------------------------------------------------------
+【下面是微信扫码登录流程】
+---
 
-用户扫码就相当于访问：
+1.用户扫码就相当于访问：
 
     https://open.weixin.qq.com/connect/oauth2/authorize?
         appid=wx123123&
@@ -26,12 +30,12 @@
 
     appid =                       微信注册后给的id
     redirect_uri = redirectUrl    重定向的地址，用户确认后微信调用你的接口给你授权码.(String redirectUrl = URLEncoder.encode("http://192.168.101.65:8080/wxLogin","UTF-8");)
-    response_type = code          固定就这样写
+    response_type = code          固定就这样写，认证类型授权码模式
     scope = snsapi_userinfo       固定就这样写，获取用户的信息，还有一个是只获取用户id
     state = STATE                 固定就这样写
     #wechat_redirect              这个是必带的
 
-微信回调自定义接口，接口里再根据授权码拿令牌，访问微信的接口 和 微信返回的内容（令牌只有30天时间，过期了需要重新向客户确认）：
+2.微信回调自定义接口，接口里再根据授权码拿令牌，访问微信的接口 和 微信返回的内容（令牌只有30天时间，过期了需要重新向客户确认）：
 
     https://api.weixin.qq.com/sns/oauth2/access_token?appid=%s&secret=%s&code=%s&grant_type=authorization_code
 
@@ -50,6 +54,7 @@
     is_snapshotuser :      是否为快照页模式虚拟账号，只有当用户是快照页模式虚拟账号时返回，值为1
     unionid :              用户统一标识(针对-一个微信开放平台帐号下的应用，同- -用户的unionid是唯一的)，只有当scope为" snsapi userinfo" 时返回
 
+    ---------------------------------------------------------------------------
     //参考代码
     private Map<String,String> getAccess_token(String code){
         //定义请求获取用户数据的路径
@@ -65,7 +70,7 @@
         return map;
     }
 
-再根据令牌拿用户信息，微信会返回个人信息：
+3.再根据令牌拿用户信息，微信会返回个人信息：
     
     https://api.weixin.qq.com/sns/userinfo?access_token=%s&openid=%s&lang=zh_CN
     
@@ -84,8 +89,7 @@
     headimgurl : 用户头像，最后一个数值代表正方形头像大小(有0、46、64、 96. 132数值可选， 0代表 640*640正方形头像)，用户没有头像时该项为空。若用户更换头像，原有头像URL将失效。
     privilege :  用户特权信息，json 数组，如微信沃卡用户为(chinaunicom)
 
-
-    
+    ---------------------------------------------------------------------------
     //参考代码
     private Map<String,String> getUserinfo(String access_token,String openid){
         //定义请求获取用户数据的路径
@@ -101,8 +105,9 @@
         return map;
     }   
 
-保存用户信息到数据库，并返回。参考代码
+4.拿到用户信息，保存用户信息到数据库，并返回。
 
+    //参考代码
     @Transactional
     public XcUser addWxUser(Map<String,String> userInfo_map){
         String unionid = userInfo_map.get("unionid");
@@ -136,7 +141,7 @@
         return xcUser;
     }
 
-
+-----------------------------------------------------------------------------
 刷新token，用户同意后拿到的令牌只有30天，过期后将不能再获取用户信息，刷新令牌的方式如下，访问微信提供的接口：
 
     https://api.weixin.qq.com/sns/oauth2/refresh_token?appid=?&grant_type=refresh_token&refresh_token=?
@@ -144,6 +149,7 @@
     appid :          注册后给的id  
     grant_type :     固定填写refresh_token
     refresh_token :  通过获取令牌时候一起获取的
+
 
 用户登录成功后把用户登录状态保存
 
